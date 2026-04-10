@@ -212,6 +212,9 @@ fn main() {
         appdb_session_busy: false,
         appdb_upload_busy: false,
         appdb_upload_result: None,
+        pending_auto_appdb_after_generate: false,
+        close_app_after_appdb_success: false,
+        appdb_success_modal_open: false,
     };
 
     let mut options = eframe::NativeOptions::default();
@@ -982,6 +985,12 @@ struct MyApp {
     appdb_session_busy: bool,
     appdb_upload_busy: bool,
     appdb_upload_result: Option<Result<(), String>>,
+    /// Set when user clicks Generate; cleared when pairing result arrives or state resets.
+    pending_auto_appdb_after_generate: bool,
+    /// True after auto-starting appdb session post-Generate; show confirm modal then exit.
+    close_app_after_appdb_success: bool,
+    /// Modal after successful appdb upload (generate flow); OK closes the app.
+    appdb_success_modal_open: bool,
 }
 
 impl MyApp {
@@ -1004,6 +1013,7 @@ impl MyApp {
         self.appdb_session_busy = false;
         self.appdb_upload_busy = false;
         self.appdb_upload_result = None;
+        self.appdb_success_modal_open = false;
     }
 
     fn reset_pairing_state(&mut self) {
@@ -1016,10 +1026,22 @@ impl MyApp {
         self.validating = false;
         self.validate_res = None;
         self.validation_ip_input.clear();
+        self.pending_auto_appdb_after_generate = false;
+        self.close_app_after_appdb_success = false;
+        self.appdb_success_modal_open = false;
         self.reset_appdb_session_state();
     }
 
     /// Sends pairing file to appdb when both `link_token` and pairing file are present.
+    fn start_appdb_attachment_session(&mut self) {
+        self.reset_appdb_session_state();
+        self.appdb_status_message = Some("Starting...".to_string());
+        self.appdb_session_busy = true;
+        self.idevice_sender
+            .send(IdeviceCommands::AppDbStartSession)
+            .unwrap();
+    }
+
     fn request_appdb_auto_upload(&mut self) {
         if self.appdb_upload_busy {
             return;
@@ -1170,12 +1192,19 @@ impl eframe::App for MyApp {
                                 None
                             }
                         };
+                        if self.pending_auto_appdb_after_generate {
+                            self.pending_auto_appdb_after_generate = false;
+                            self.close_app_after_appdb_success = true;
+                            self.start_appdb_attachment_session();
+                        }
                         self.request_appdb_auto_upload();
                     }
                     Err(e) => {
                         self.pairing_file = None;
                         self.pairing_file_string = None;
                         self.pairing_file_message = Some(e.to_string());
+                        self.pending_auto_appdb_after_generate = false;
+                        self.close_app_after_appdb_success = false;
                         self.reset_appdb_session_state();
                     }
                 },
@@ -1224,6 +1253,7 @@ impl eframe::App for MyApp {
                 GuiCommands::AppDbError(msg) => {
                     self.appdb_session_busy = false;
                     self.appdb_status_message = Some(msg);
+                    self.close_app_after_appdb_success = false;
                 }
                 GuiCommands::AppDbSessionExpired => {
                     self.appdb_link_token = None;
@@ -1232,6 +1262,7 @@ impl eframe::App for MyApp {
                     self.appdb_qr_texture = None;
                     self.appdb_upload_busy = false;
                     self.appdb_upload_result = None;
+                    self.close_app_after_appdb_success = false;
                     self.appdb_status_message =
                         Some("Link session expired. Start a new session.".to_string());
                 }
@@ -1239,8 +1270,16 @@ impl eframe::App for MyApp {
                     self.appdb_upload_busy = false;
                     match &res {
                         Ok(()) => {
-                            self.appdb_status_message =
-                                Some("Pairing file attached to appdb successfully.".to_string());
+                            if self.close_app_after_appdb_success {
+                                self.appdb_status_message = Some(
+                                    "Pairing file attached to appdb successfully.".to_string(),
+                                );
+                                self.appdb_success_modal_open = true;
+                            } else {
+                                self.appdb_status_message = Some(
+                                    "Pairing file attached to appdb successfully.".to_string(),
+                                );
+                            }
                             self.appdb_qr_texture = None;
                             self.appdb_uuid = None;
                         }
@@ -1440,6 +1479,8 @@ impl eframe::App for MyApp {
                                                 Some("Loading...".to_string());
                                             self.pairing_file_string = None;
                                             self.save_error = None;
+                                            self.pending_auto_appdb_after_generate = false;
+                                            self.close_app_after_appdb_success = false;
                                             self.reset_appdb_session_state();
                                             self.idevice_sender
                                                 .send(IdeviceCommands::LoadPairingFile(
@@ -1450,6 +1491,8 @@ impl eframe::App for MyApp {
                                     }
                                     #[cfg(feature = "generate")]
                                     {
+                                        self.pending_auto_appdb_after_generate = false;
+                                        self.close_app_after_appdb_success = false;
                                         self.reset_appdb_session_state();
                                         self.pairing_file_message = Some("Loading...".to_string());
                                         self.pairing_file_string = None;
@@ -1481,6 +1524,8 @@ impl eframe::App for MyApp {
                                 if ui.button("Generate").clicked() {
                                     self.pairing_file = None;
                                     self.reset_appdb_session_state();
+                                    self.pending_auto_appdb_after_generate = true;
+                                    self.close_app_after_appdb_success = false;
                                     self.pairing_file_message = Some("Loading...".to_string());
                                     self.pairing_file_string = None;
                                     self.save_error = None;
@@ -1509,12 +1554,8 @@ impl eframe::App for MyApp {
                                 })
                                 .inner
                             {
-                                self.reset_appdb_session_state();
-                                self.appdb_status_message = Some("Starting...".to_string());
-                                self.appdb_session_busy = true;
-                                self.idevice_sender
-                                    .send(IdeviceCommands::AppDbStartSession)
-                                    .unwrap();
+                                self.close_app_after_appdb_success = false;
+                                self.start_appdb_attachment_session();
                             }
                         });
                         if let Some(msg) = &self.appdb_status_message {
@@ -1768,5 +1809,17 @@ impl eframe::App for MyApp {
                 }
             });
         });
+
+        if self.appdb_success_modal_open {
+            egui::Modal::new(egui::Id::new("appdb_attach_success")).show(ctx, |ui| {
+                ui.set_min_width(280.0);
+                ui.heading("Success");
+                ui.label("Pairing file attached to appdb successfully.");
+                ui.add_space(16.0);
+                if ui.button("OK").clicked() {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                }
+            });
+        }
     }
 }
