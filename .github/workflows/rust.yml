@@ -19,7 +19,7 @@ on:
 env:
   BINARY_NAME: idevice_pair
   APP_NAME: idevice_pair
-  VERSION: ${{ github.event.inputs.version }}
+  VERSION: ${{ github.event.inputs.version || '1.0.0' }}
   ICON_PNG: icon.png
   CARGO_TERM_COLOR: always
 
