@@ -56,6 +56,14 @@ Prebuilt binaries for the **original** project are on [upstream releases](https:
 
 For fuller pairing prerequisites (passcode, Developer Mode, etc.), see upstream’s README and [appdb](https://appdb.to) instructions.
 
+## Translation
+
+This project supports multiple languages.
+
+1. Locate the `locales/` directory.
+2. Create a new `.toml` file named with your language code.
+3. Use `en.toml` as a template and translate the strings.
+
 ## Troubleshooting
 
 - **Device not seen:** USB, trust, and usbmuxd / iTunes (Windows) as in upstream docs.
