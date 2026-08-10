@@ -33,6 +33,41 @@ fn native_options() -> eframe::NativeOptions {
 
     eframe::NativeOptions {
         viewport,
+        renderer: pick_renderer(),
         ..Default::default()
     }
+}
+
+/// Fall back to OpenGL when Metal fails on Macs patched with OpenCore.
+#[cfg(target_os = "macos")]
+fn pick_renderer() -> eframe::Renderer {
+    use eframe::wgpu;
+
+    let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
+    descriptor.backends = wgpu::Backends::METAL;
+    let instance = wgpu::Instance::new(descriptor);
+
+    let result = pollster::block_on(async {
+        let adapter = instance
+            .request_adapter(&wgpu::RequestAdapterOptions::default())
+            .await
+            .map_err(|e| e.to_string())?;
+        adapter
+            .request_device(&wgpu::DeviceDescriptor::default())
+            .await
+            .map_err(|e| e.to_string())
+    });
+
+    match result {
+        Ok(_) => eframe::Renderer::Wgpu,
+        Err(error) => {
+            tracing::warn!("Metal initialization failed; falling back to OpenGL: {error}");
+            eframe::Renderer::Glow
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn pick_renderer() -> eframe::Renderer {
+    eframe::Renderer::Wgpu
 }

@@ -29,6 +29,10 @@ uuid = { version = "1.24", features = ["v4"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+eframe = { version = "0.35.0", features = ["glow"] }
+pollster = "0.4"
+
 [build-dependencies]
 reqwest = { version = "0.13", features = ["blocking"] }
 
