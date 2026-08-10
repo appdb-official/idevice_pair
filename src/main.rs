@@ -24,6 +24,9 @@ fn main() -> eframe::Result {
 fn native_options() -> eframe::NativeOptions {
     let viewport = egui::ViewportBuilder::default().with_inner_size([760.0, 620.0]);
 
+    #[cfg(target_os = "macos")]
+    let viewport = viewport.with_icon(std::sync::Arc::new(egui::IconData::default()));
+
     #[cfg(not(target_os = "macos"))]
     let viewport = {
         let icon = eframe::icon_data::from_png_bytes(include_bytes!("../icon.png"))
