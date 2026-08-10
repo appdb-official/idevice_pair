@@ -436,6 +436,7 @@ impl Worker {
                 .block_on(usb::watch(change_sender));
         });
         tokio::spawn(async move {
+            self.refresh_devices().await;
             while changes.recv().await.is_some() {
                 self.refresh_devices().await;
             }
