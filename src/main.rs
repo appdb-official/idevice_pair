@@ -34,11 +34,29 @@ fn native_options() -> eframe::NativeOptions {
         viewport.with_icon(std::sync::Arc::new(icon))
     };
 
-    eframe::NativeOptions {
+    let mut options = eframe::NativeOptions {
         viewport,
         renderer: pick_renderer(),
         ..Default::default()
+    };
+
+    use eframe::egui_wgpu::WgpuSetup;
+    if let WgpuSetup::CreateNew(setup) = &mut options.wgpu_options.wgpu_setup {
+        let default_device_descriptor = std::sync::Arc::clone(&setup.device_descriptor);
+        setup.device_descriptor = std::sync::Arc::new(move |adapter| {
+            let mut descriptor = default_device_descriptor(adapter);
+
+            // Clamp eframe's requested limits to the adapter's capabilities.
+            // Raspberry Pi 5, for example, supports 4 rather than 8 color attachments.
+            descriptor.required_limits = descriptor
+                .required_limits
+                .or_worse_values_from(&adapter.limits());
+
+            descriptor
+        });
     }
+
+    options
 }
 
 /// Fall back to OpenGL when Metal fails on Macs patched with OpenCore.
