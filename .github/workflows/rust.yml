@@ -5,16 +5,9 @@ on:
     branches:
       - master
     tags:
-      - "v[0-9]*"
+      - "v*.*.*"
 
   pull_request:
-
-  workflow_dispatch:
-    inputs:
-      create_release:
-        description: Create a GitHub release
-        type: boolean
-        default: false
 
 env:
   BINARY_NAME: idevice_pair
@@ -322,15 +315,13 @@ jobs:
           path: dist/${{ env.APP_NAME }}--macos-universal.dmg
 
   release:
-    name: Draft GitHub Release
+    name: GitHub Release
     runs-on: ubuntu-24.04
     needs:
       - build-linux
       - build-windows
       - build-macos-universal
-    if: |
-      startsWith(github.ref, 'refs/tags/') ||
-      inputs.create_release == true
+    if: startsWith(github.ref, 'refs/tags/')
     permissions:
       contents: write
     steps:
@@ -363,25 +354,18 @@ jobs:
       - name: Extract version
         id: get_version
         run: |
-          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
-            VERSION="${GITHUB_REF_NAME#v}"
-            TAG="${GITHUB_REF_NAME}"
-          else
-            VERSION="$(awk -F '"' '/^version = / { print $2; exit }' Cargo.toml)"
-            VERSION="${VERSION#v}"
-            TAG="v${VERSION}"
-          fi
+          VERSION="${GITHUB_REF_NAME#v}"
+          TAG="${GITHUB_REF_NAME}"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
-          name: ${{ steps.get_version.outputs.version }}
+          name: ${{ steps.get_version.outputs.tag }}
           tag_name: ${{ steps.get_version.outputs.tag }}
           files: release-assets/*
           generate_release_notes: true
           fail_on_unmatched_files: true
-          draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
