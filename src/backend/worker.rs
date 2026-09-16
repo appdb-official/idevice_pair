@@ -239,6 +239,17 @@ impl Worker {
             Ok(mut link) => install::list(&mut link, kind).await,
             Err(e) => Err(e),
         };
+        let result = result.map(|mut apps| {
+            apps.insert(
+                0,
+                InstalledApp {
+                    name: "appdb".into(),
+                    bundle_id: String::new(),
+                    path: "UDID",
+                },
+            );
+            apps
+        });
         self.events.send(Event::Apps {
             key,
             result: result.map_err(text),
@@ -332,12 +343,20 @@ impl Worker {
             );
         };
 
-        let result = async {
-            let bytes = payload.bytes()?;
-            let mut link = state.link().await?;
-            install::write(&mut link, &app, &bytes).await
-        }
-        .await;
+        let result = if app.name == "appdb" {
+            drop(state);
+            match payload.bytes() {
+                Ok(bytes) => attach_to_appdb(udid(&key), &bytes).await,
+                Err(e) => Err(e),
+            }
+        } else {
+            async {
+                let bytes = payload.bytes()?;
+                let mut link = state.link().await?;
+                install::write(&mut link, &app, &bytes).await
+            }
+            .await
+        };
 
         self.installed(&key, &app.name, result);
     }
@@ -536,4 +555,30 @@ fn udid(key: &DeviceKey) -> &str {
 
 fn text(e: IdeviceError) -> String {
     super::message(&e)
+}
+
+async fn attach_to_appdb(udid: &str, pairing_file: &[u8]) -> Result<(), IdeviceError> {
+    let response = reqwest::Client::new()
+        .post(format!(
+            "https://api.dbservices.to/v1.7/attach_pairing_file/?udid={udid}"
+        ))
+        .header("content-type", "text/plain")
+        .body(pairing_file.to_vec())
+        .send()
+        .await
+        .map_err(|e| IdeviceError::InternalError(e.to_string()))?;
+    let text = response
+        .text()
+        .await
+        .map_err(|e| IdeviceError::InternalError(e.to_string()))?;
+    let text = text.trim();
+    if text == "OK" {
+        Ok(())
+    } else {
+        Err(IdeviceError::InternalError(if text.is_empty() {
+            "empty response".into()
+        } else {
+            text.to_string()
+        }))
+    }
 }

@@ -15,6 +15,7 @@ A cross-platform GUI for creating iOS pairing files, over USB or over Wi-Fi.
 
 Apps with a known pairing file location:
 
+- [appdb](https://appdb.to)
 - [SideStore](https://github.com/SideStore/SideStore)
 - [LiveContainer+SideStore](https://github.com/LiveContainer/LiveContainer)
 - [StikDebug](https://github.com/StephenDev0/StikDebug)
